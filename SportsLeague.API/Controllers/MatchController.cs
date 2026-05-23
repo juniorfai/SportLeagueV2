@@ -1,61 +1,44 @@
-﻿using AutoMapper;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using AutoMapper;
 using SportsLeague.API.DTOs.Request;
 using SportsLeague.API.DTOs.Response;
-using SportsLeague.Domain.Entities;
 using SportsLeague.Domain.Interfaces.Services;
 
 namespace SportsLeague.API.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")] // Ruta base: api/match
-    public class MatchController : ControllerBase
+    [Route("api/match/{matchId}/lineup")]
+    public class MatchLineupController : ControllerBase
     {
-        private readonly IMatchService _matchService;
+        private readonly IMatchLineupService _matchLineupService;
         private readonly IMapper _mapper;
 
-        public MatchController(
-            IMatchService matchService,
+        public MatchLineupController(
+            IMatchLineupService matchLineupService,
             IMapper mapper)
         {
-            _matchService = matchService;
+            _matchLineupService = matchLineupService;
             _mapper = mapper;
         }
 
-        [HttpGet("tournament/{tournamentId}")] // GET api/match/tournament/5
-        public async Task<ActionResult<IEnumerable<MatchResponseDTO>>> GetByTournament(int tournamentId)
-        {
-            try
-            {
-                var matches = await _matchService.GetAllByTournamentAsync(tournamentId);
-                return Ok(_mapper.Map<IEnumerable<MatchResponseDTO>>(matches));
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-        }
-
-        [HttpGet("{id}")]
-        public async Task<ActionResult<MatchResponseDTO>> GetById(int id)
-        {
-            var match = await _matchService.GetByIdAsync(id);
-            if (match == null)
-                return NotFound(new { message = $"Partido con ID {id} no encontrado" });
-
-            return Ok(_mapper.Map<MatchResponseDTO>(match));
-        }
-
         [HttpPost]
-        public async Task<ActionResult<MatchResponseDTO>> Create(MatchRequestDTO dto)
+        public async Task<ActionResult<MatchLineupResponseDTO>> AddToLineup(
+            int matchId,
+            [FromBody] CreateMatchLineupRequestDTO request)
         {
             try
             {
-                var match = _mapper.Map<Match>(dto);
-                var created = await _matchService.CreateAsync(match);
-                var matchWithDetails = await _matchService.GetByIdAsync(created.Id);
-                var responseDto = _mapper.Map<MatchResponseDTO>(matchWithDetails);
-                return CreatedAtAction(nameof(GetById), new { id = responseDto.Id }, responseDto);
+                var lineup = await _matchLineupService.AddToLineupAsync(
+                    matchId,
+                    request.PlayerId,
+                    request.IsStarter,
+                    request.Position);
+
+                var response = _mapper.Map<MatchLineupResponseDTO>(lineup);
+                return CreatedAtAction(
+                    nameof(GetLineupByMatch),
+                    new { matchId },
+                    response);
             }
             catch (KeyNotFoundException ex)
             {
@@ -67,59 +50,32 @@ namespace SportsLeague.API.Controllers
             }
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult> Update(int id, MatchRequestDTO dto)
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<MatchLineupResponseDTO>>> GetLineupByMatch(int matchId)
         {
-            try
-            {
-                var match = _mapper.Map<Match>(dto);
-                await _matchService.UpdateAsync(id, match);
-                return NoContent();
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { message = ex.Message });
-            }
+            var lineups = await _matchLineupService.GetLineupByMatchAsync(matchId);
+            var response = _mapper.Map<IEnumerable<MatchLineupResponseDTO>>(lineups);
+            return Ok(response);
+        }
+
+        [HttpGet("team/{teamId}")]
+        public async Task<ActionResult<IEnumerable<MatchLineupResponseDTO>>> GetLineupByTeam(
+            int matchId,
+            int teamId)
+        {
+            var lineups = await _matchLineupService.GetLineupByMatchAndTeamAsync(matchId, teamId);
+            var response = _mapper.Map<IEnumerable<MatchLineupResponseDTO>>(lineups);
+            return Ok(response);
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> Delete(int id)
+        public async Task<IActionResult> RemoveFromLineup(int matchId, int id)
         {
-            try
-            {
-                await _matchService.DeleteAsync(id);
-                return NoContent();
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { message = ex.Message });
-            }
-        }
+            var result = await _matchLineupService.RemoveFromLineupAsync(id);
+            if (!result)
+                return NotFound(new { message = $"No se encontró la alineación con ID {id}" });
 
-        [HttpPatch("{id}/status")]
-        public async Task<ActionResult> UpdateStatus(int id, UpdateMatchStatusDTO dto)
-        {
-            try
-            {
-                await _matchService.UpdateStatusAsync(id, dto.Status);
-                return NoContent();
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { message = ex.Message });
-            }
+            return NoContent();
         }
     }
 }

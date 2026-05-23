@@ -1,0 +1,13 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace SportsLeague.API.DTOs.Request
+{
+    public class CreateMatchLineupRequestDTO
+    {
+        public int PlayerId { get; set; }
+        public bool IsStarter { get; set; }
+        public string Position { get; set; } = string.Empty;
+    }
+}
